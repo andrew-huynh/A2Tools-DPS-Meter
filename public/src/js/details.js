@@ -67,6 +67,9 @@ const createDetailsUI = ({
   let lastUnfilteredDetails = null;
   const detailsCacheByRowId = new Map();
   const COMPACT_MAX_SKILLS = 5;
+  // Party bars a fight can list: a raid's rows (rederive.rs RAID_ROWS), so a
+  // ten-player party is whole. Past that the list scrolls.
+  const PARTY_BAR_MAX = 24;
   const expandedDotParents = new Set();
   const cjkRegex = /[\u3400-\u9FFF\uF900-\uFAFF]/;
 
@@ -772,8 +775,8 @@ const createDetailsUI = ({
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
-    // Cap party list to 8 players to prevent overflow in large fights
-    const actors = allActors.slice(0, 8);
+    // Cap party list to a raid's rows; the list scrolls rather than clipping.
+    const actors = allActors.slice(0, PARTY_BAR_MAX);
 
     const topDmg = actors.reduce((m, a) => Math.max(m, Number(a.totalDmg) || 0), 1);
     const btMs = Number(battleTimeMs) || Number(lastDetails?.battleTimeMs) || 0;
