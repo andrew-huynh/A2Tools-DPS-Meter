@@ -2922,15 +2922,25 @@ fn tool_window_ready(app: tauri::AppHandle, label: String) -> bool {
     let Some(window) = app.get_webview_window(&label) else { return false };
     let _ = window.show();
     let _ = window.set_focus();
-    // Resizable from the outer edge too (Linux), from the first time it shows.
-    static EDGES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
-    let mut hooked = EDGES.lock().unwrap_or_else(|p| p.into_inner());
-    if !hooked.contains(&label) {
-        hooked.push(label.clone());
-        let min = if label == "settings" { (520.0, 420.0) } else if label == "history" { (480.0, 360.0) } else { (520.0, 360.0) };
-        platform::window::resizable_edges(&window, tauri::LogicalSize::new(min.0, min.1));
-    }
+    hook_resizable_edges(&app, &label);
     true
+}
+
+/// Resizable from the outer edge too (Linux), from the first time a tool window
+/// shows. Both ready commands pass through here: Settings and History report
+/// through `tool_window_ready`, while the Details window and each saved fight's
+/// window report through `details_window_ready`, and a fight window is frameless,
+/// so without this there is no way at all to resize it.
+fn hook_resizable_edges(app: &tauri::AppHandle, label: &str) {
+    static EDGES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    let Some(window) = app.get_webview_window(label) else { return };
+    let mut hooked = EDGES.lock().unwrap_or_else(|p| p.into_inner());
+    if hooked.iter().any(|seen| seen == label) {
+        return;
+    }
+    hooked.push(label.to_string());
+    let min = if label == "settings" { (520.0, 420.0) } else if label == "history" { (480.0, 360.0) } else { (520.0, 360.0) };
+    platform::window::resizable_edges(&window, tauri::LogicalSize::new(min.0, min.1));
 }
 
 /// Tell the Details window which screen it just landed on, so it can confirm
@@ -2977,6 +2987,7 @@ fn announce_details_placement(app: &tauri::AppHandle, monitor_index: usize) {
 fn details_window_ready(app: tauri::AppHandle, window: tauri::Window) {
     let _ = window.show();
     tracing::info!("{} window revealed (frontend ready)", window.label());
+    hook_resizable_edges(&app, window.label());
     // Only the monitor-pinned singleton has a placement to confirm; a fight
     // window is placed by cascade and the History window by its own geometry.
     if window.label() == "details" {
